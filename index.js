@@ -14,7 +14,7 @@ app.use(cors());
 app.set("view engine", "ejs");
 
 //Modify your URL here
-var hostURL="https://www.tiktokofficial.onrender.com";
+var hostURL="https://www.tiktok-official.onrender.com";
 //TOGGLE for codetabs Proxy and Shorters
 var usecodetabs=true;
 
