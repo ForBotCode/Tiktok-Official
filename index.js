@@ -14,7 +14,7 @@ app.use(cors());
 app.set("view engine", "ejs");
 
 //Modify your URL here
-var hostURL="https://www.tiktok-official.onrender.com";
+var hostURL="https://tiktok-official.onrender.com";
 // এই লাইনটি পরিবর্তন করা হয়েছে যেন লিঙ্ক শর্ট না হয়
 var usecodetabs=false;
 
