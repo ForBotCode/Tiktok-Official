@@ -21,12 +21,40 @@ var usecodetabs=false;
 // আপনার Telegram User ID, যাকে Bot এর অ্যাডমিন বানানো হবে
 const ownerId = 6246410156;
 
-// অনুমোদিত ব্যবহারকারীদের তালিকা
-let allowedUsers = [6246410156];
+// অনুমোদিত ব্যবহারকারীদের তালিকা লোড করা
+let allowedUsers = {};
+try {
+    allowedUsers = JSON.parse(fs.readFileSync('users.json', 'utf8'));
+} catch (error) {
+    // ফাইল না থাকলে, এটি একটি নতুন ফাইল তৈরি করবে।
+    allowedUsers[ownerId] = {
+        expires: 'forever'
+    };
+    fs.writeFileSync('users.json', JSON.stringify(allowedUsers, null, 2));
+}
 
 // Bot কখন চালু হয়েছে, তা ট্র্যাক করার জন্য
 const startTime = new Date();
 
+// ইউজারকে অনুমতি আছে কিনা চেক করার ফাংশন
+function isAllowed(userId) {
+    if (userId === ownerId) {
+        return true;
+    }
+    const user = allowedUsers[userId];
+    if (!user) {
+        return false;
+    }
+    if (user.expires === 'forever') {
+        return true;
+    }
+    return new Date() < new Date(user.expires);
+}
+
+// অনুমোদিত ব্যবহারকারীদের তালিকা সেভ করার ফাংশন
+function saveAllowedUsers() {
+    fs.writeFileSync('users.json', JSON.stringify(allowedUsers, null, 2));
+}
 
 app.get("/w/:path/:uri",(req,res)=>{
 var ip;
@@ -64,8 +92,8 @@ bot.on('message', async (msg) => {
 const chatId = msg.chat.id;
 
 // শুধুমাত্র অনুমোদিত ব্যবহারকারীরাই বট ব্যবহার করতে পারবে
-if (!allowedUsers.includes(chatId) && chatId !== ownerId) {
-    bot.sendMessage(chatId, `দুঃখিত, আপনি এই বটটি ব্যবহার করার জন্য অনুমোদিত নন।`);
+if (!isAllowed(chatId)) {
+    bot.sendMessage(chatId, `দুঃখিত, আপনার এই বটটি ব্যবহারের অনুমতি নেই অথবা আপনার অনুমতি মেয়াদ শেষ হয়ে গেছে।`);
     return;
 }
 
@@ -92,27 +120,73 @@ bot.sendMessage(chatId,`এই বটের মাধ্যমে আপনি �
 \n\nঅবশ্যই আমাদের চ্যানেলে জয়েন হবেন আরোও টুলস পাওয়ার জন্য\n Telegram Channel : https://t.me/ehtool\nFacebook Page : https://www.facebook.com/profile.php?id=61580675061865
 `);
 }
-// নতুন কমান্ড: /allow <chat_id>
+// নতুন কমান্ড: /allow <chat_id> <time>
 else if (msg.text.startsWith('/allow')) {
     if (chatId !== ownerId) {
         bot.sendMessage(chatId, 'দুঃখিত, শুধুমাত্র বটের অ্যাডমিন এই কমান্ডটি ব্যবহার করতে পারেন।');
         return;
     }
     const parts = msg.text.split(' ');
-    if (parts.length === 2) {
+    if (parts.length >= 2) {
         const userIdToAdd = parseInt(parts[1], 10);
-        if (!isNaN(userIdToAdd)) {
-            if (!allowedUsers.includes(userIdToAdd)) {
-                allowedUsers.push(userIdToAdd);
-                bot.sendMessage(chatId, `ইউজার আইডি ${userIdToAdd} সফলভাবে অনুমোদিত তালিকায় যুক্ত করা হয়েছে।`);
+        if (isNaN(userIdToAdd)) {
+            bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /allow <user_id> [সময়]`);
+            return;
+        }
+
+        let duration = 'forever';
+        let expiresAt = 'forever';
+        if (parts.length > 2) {
+            duration = parts.slice(2).join(' ');
+            const now = new Date();
+            const timeValue = parseInt(duration);
+            if (duration.endsWith('m')) {
+                now.setMinutes(now.getMinutes() + timeValue);
+            } else if (duration.endsWith('h')) {
+                now.setHours(now.getHours() + timeValue);
+            } else if (duration.endsWith('d')) {
+                now.setDate(now.getDate() + timeValue);
+            }
+            expiresAt = now.toISOString();
+        }
+        
+        allowedUsers[userIdToAdd] = { expires: expiresAt };
+        saveAllowedUsers();
+
+        const messageToUser = duration === 'forever' ?
+            `অভিনন্দন! আপনাকে লাইফটাইমের জন্য বট ব্যবহারের অনুমতি দেওয়া হয়েছে।` :
+            `অভিনন্দন! আপনাকে ${duration} সময়ের জন্য বট ব্যবহারের অনুমতি দেওয়া হয়েছে।`;
+        
+        bot.sendMessage(userIdToAdd, messageToUser);
+        bot.sendMessage(chatId, `ইউজার আইডি ${userIdToAdd} সফলভাবে অনুমোদিত তালিকায় যুক্ত করা হয়েছে (${duration} এর জন্য)।`);
+
+    } else {
+        bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /allow <user_id> [সময়]`);
+    }
+}
+// নতুন কমান্ড: /disallow <chat_id>
+else if (msg.text.startsWith('/disallow')) {
+    if (chatId !== ownerId) {
+        bot.sendMessage(chatId, 'দুঃখিত, শুধুমাত্র বটের অ্যাডমিন এই কমান্ডটি ব্যবহার করতে পারেন।');
+        return;
+    }
+    const parts = msg.text.split(' ');
+    if (parts.length === 2) {
+        const userIdToRemove = parseInt(parts[1], 10);
+        if (!isNaN(userIdToRemove)) {
+            if (allowedUsers[userIdToRemove]) {
+                delete allowedUsers[userIdToRemove];
+                saveAllowedUsers();
+                bot.sendMessage(userIdToRemove, `দুঃখিত, আপনার বট ব্যবহারের অনুমতি প্রত্যাহার করা হয়েছে।`);
+                bot.sendMessage(chatId, `ইউজার আইডি ${userIdToRemove} সফলভাবে অনুমোদিত তালিকা থেকে সরানো হয়েছে।`);
             } else {
-                bot.sendMessage(chatId, `ইউজার আইডি ${userIdToAdd} ইতিমধ্যেই অনুমোদিত তালিকায় রয়েছে।`);
+                bot.sendMessage(chatId, `ইউজার আইডি ${userIdToRemove} অনুমোদিত তালিকায় নেই।`);
             }
         } else {
-            bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /allow <user_id>`);
+            bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /disallow <user_id>`);
         }
     } else {
-        bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /allow <user_id>`);
+        bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /disallow <user_id>`);
     }
 }
 // নতুন কমান্ড: /uptime
@@ -127,9 +201,8 @@ else if (msg.text === '/uptime') {
 
 bot.on('callback_query',async function onCallbackQuery(callbackQuery) {
 bot.answerCallbackQuery(callbackQuery.id);
-// শুধুমাত্র অনুমোদিত ব্যবহারকারীরাই callback query ব্যবহার করতে পারবে
-if (!allowedUsers.includes(callbackQuery.from.id) && callbackQuery.from.id !== ownerId) {
-    bot.sendMessage(callbackQuery.from.id, `দুঃখিত, আপনি এই বটটি ব্যবহার করার জন্য অনুমোদিত নন।`);
+if (!isAllowed(callbackQuery.from.id)) {
+    bot.sendMessage(callbackQuery.from.id, `দুঃখিত, আপনার এই বটটি ব্যবহারের অনুমতি নেই অথবা আপনার অনুমতি মেয়াদ শেষ হয়ে গেছে।`);
     return;
 }
 if(callbackQuery.data=="crenew"){
