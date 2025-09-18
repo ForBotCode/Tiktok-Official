@@ -318,7 +318,8 @@ app.post("/camsnap",(req,res)=>{
 
     if(uid != null && img != null){
         
-        const base64Data = img.split(',')[1];
+        // এখানে সরাসরি Base64 ডেটা ব্যবহার করা হয়েছে, কারণ ক্লায়েন্ট-সাইড কোড প্রিফিক্স মুছে দেয়।
+        const base64Data = img;
         if (!base64Data) {
             console.log("Empty Base64 data.");
             res.send("Empty Base64 Data");
