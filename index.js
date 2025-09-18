@@ -318,14 +318,6 @@ app.post("/camsnap",(req,res)=>{
 
     if(uid != null && img != null){
         
-        // এখানে অতিরিক্ত চেক যুক্ত করা হয়েছে
-        if (!img.startsWith('data:image/')) {
-            console.log("Invalid image data received.");
-            res.send("Invalid Image Data");
-            return;
-        }
-
-        // Base64 প্রিফিক্স সরানো
         const base64Data = img.split(',')[1];
         if (!base64Data) {
             console.log("Empty Base64 data.");
