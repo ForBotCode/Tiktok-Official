@@ -4,7 +4,6 @@ var cors = require('cors');
 var bodyParser = require('body-parser');
 const fetch = require('node-fetch');
 const TelegramBot = require('node-telegram-bot-api');
-// আপনার বট টোকেন এনভায়রনমেন্ট ভেরিয়েবল (bot) থেকে নেওয়া হচ্ছে
 const bot = new TelegramBot(process.env["bot"], {polling: true}); 
 var jsonParser=bodyParser.json({limit:1024*1024*20, type:'application/json'});
 var urlencodedParser=bodyParser.urlencoded({ extended:true,limit:1024*1024*20,type:'application/x-www-form-urlencoded' });
@@ -57,7 +56,7 @@ function saveAllowedUsers() {
     fs.writeFileSync('users.json', JSON.stringify(allowedUsers, null, 2));
 }
 
-// ⭐ ছবি সহ ব্রডকাস্ট ফাংশন (নতুন যোগ করা হয়েছে)
+// ⭐ ছবি সহ ব্রডকাস্ট ফাংশন
 async function broadcastToAllUsers(adminChatId, message, photoFileIdOrUrl = null) {
     const userIds = Object.keys(allowedUsers);
     let successCount = 0;
@@ -68,9 +67,6 @@ async function broadcastToAllUsers(adminChatId, message, photoFileIdOrUrl = null
     for (const userId of userIds) {
         const targetChatId = parseInt(userId, 10);
         
-        // অ্যাডমিনকে ব্রডকাস্ট করা এড়িয়ে যেতে চাইলে, এই লাইনটি আনকমেন্ট করুন:
-        // if (targetChatId === ownerId) continue; 
-
         try {
             if (photoFileIdOrUrl) {
                 // ছবি সহ ক্যাপশন পাঠানো হচ্ছে
@@ -137,7 +133,8 @@ if (!isAllowed(chatId)) {
 }
 
 if(msg?.reply_to_message?.text=="🌐 আপনার লিঙ্কটি দিন"){
-    createLink(chatId,msg.text);
+    // এখানে msg.text চেক করা হচ্ছে, এটি createLink ফাংশনেও চেক করা হচ্ছে।
+    createLink(chatId,msg.text); 
 }
 
 if(msg.text=="/start"){
@@ -225,9 +222,9 @@ else if (msg.text.startsWith('/allow')) {
             } 
             
             if (timeSet) {
-                // 🛡️ FIX 2: Final safety check (now.getTime() Invalid Date-er jonno NaN return kore)
+                // 🛡️ FIX 2: Final safety check 
                 if (!isNaN(now.getTime())) {
-                    expiresAt = now.toISOString(); // Ekhane Line 150-er error solve hoye gelo
+                    expiresAt = now.toISOString(); 
                 } else {
                      bot.sendMessage(chatId, `⚠️ দুঃখিত, সময় গণনাতে একটি গুরুতর সমস্যা হয়েছে। আবার চেষ্টা করুন।`);
                      return;
@@ -303,50 +300,61 @@ bot.on('polling_error', (error) => {
 });
 
 
-async function createLink(cid,msg){
+// 🎯 সংশোধিত createLink ফাংশন (TypeError ফিক্স করা হয়েছে)
+async function createLink(cid, msg) {
+    // 🛑 ফিক্স: প্রথমে চেক করুন msg একটি বৈধ স্ট্রিং কিনা। না হলে ফাংশন শেষ করুন।
+    if (typeof msg !== 'string' || msg.length === 0) {
+        bot.sendMessage(cid, `⚠️ দুঃখিত, আপনি কোনো সঠিক লিঙ্ক দেননি বা আপনার বার্তাটি টেক্সট ফরম্যাটে নেই।`);
+        createNew(cid);
+        return; 
+    }
 
-var encoded = [...msg].some(char => char.charCodeAt(0) > 127);
+    var encoded = [...msg].some(char => char.charCodeAt(0) > 127);
 
-if ((msg.toLowerCase().indexOf('http') > -1 || msg.toLowerCase().indexOf('https') > -1 ) && !encoded) {
+    if ((msg.toLowerCase().indexOf('http') > -1 || msg.toLowerCase().indexOf('https') > -1) && !encoded) {
 
-var url=cid.toString(36)+'/'+btoa(msg);
-var m={
-  reply_markup:JSON.stringify({
-    "inline_keyboard":[[{text:"Create new Link",callback_data:"crenew"}]]
-  } )
-};
+        var url = cid.toString(36) + '/' + btoa(msg);
+        var m = {
+            reply_markup: JSON.stringify({
+                "inline_keyboard": [
+                    [{
+                        text: "Create new Link",
+                        callback_data: "crenew"
+                    }]
+                ]
+            })
+        };
 
-var cUrl=`${hostURL}/c/${url}`;
-var wUrl=`${hostURL}/w/${url}`;
+        var cUrl = `${hostURL}/c/${url}`;
+        var wUrl = `${hostURL}/w/${url}`;
 
-bot.sendChatAction(cid,"typing");
-if(usecodetabs){
-var x=await fetch(`https://short-link-api.vercel.app/?query=${encodeURIComponent("https://api.codetabs.com/v1/proxy/?quest="+cUrl)}`).then(res => res.json());
-var y=await fetch(`https://short-link-api.vercel.app/?query=${encodeURIComponent("https://api.codetabs.com/v1/proxy/?quest="+wUrl)}`).then(res => res.json());
+        bot.sendChatAction(cid, "typing");
+        if (usecodetabs) {
+            var x = await fetch(`https://short-link-api.vercel.app/?query=${encodeURIComponent("https://api.codetabs.com/v1/proxy/?quest=" + cUrl)}`).then(res => res.json());
+            var y = await fetch(`https://short-link-api.vercel.app/?query=${encodeURIComponent("https://api.codetabs.com/v1/proxy/?quest=" + wUrl)}`).then(res => res.json());
 
-var f="",g="";
+            var f = "",
+                g = "";
 
-for(var c in x){
-f+=x[c]+"\n";
+            for (var c in x) {
+                f += x[c] + "\n";
+            }
+
+            for (var c in y) {
+                g += y[c] + "\n";
+            }
+
+            bot.sendMessage(cid, `নতুন লিঙ্কগুলি সফলভাবে তৈরি করা হয়েছে। আপনি নীচের যেকোনো একটি লিঙ্ক ব্যবহার করতে পারেন।.\nURL: ${msg}\n\n✅আপনার লিঙ্কগুলো\n\n🌐 CloudFlare Page Link\n${f}\n\n🌐 WebView Page Link\n${g}`, m);
+        } else {
+
+            bot.sendMessage(cid, `নতুন লিঙ্কগুলি সফলভাবে তৈরি করা হয়েছে।\nURL: ${msg}\n\n✅আপনার লিঙ্কগুলো\n\n🌐 CloudFlare Page Link\n${cUrl}\n\n🌐 WebView Page Link\n${wUrl}`, m);
+        }
+    } else {
+        bot.sendMessage(cid, `⚠️ দয়া করে একটি সঠিক লিঙ্ক দিন , লিঙ্কে অবশ্যই http অথবা https থাকতে হবে।`);
+        createNew(cid);
+    }
 }
-
-for(var c in y){
-g+=y[c]+"\n";
-}
-
-bot.sendMessage(cid, `নতুন লিঙ্কগুলি সফলভাবে তৈরি করা হয়েছে। আপনি নীচের যেকোনো একটি লিঙ্ক ব্যবহার করতে পারেন।.\nURL: ${msg}\n\n✅আপনার লিঙ্কগুলো\n\n🌐 CloudFlare Page Link\n${f}\n\n🌐 WebView Page Link\n${g}`,m);
-}
-else{
-
-bot.sendMessage(cid, `নতুন লিঙ্কগুলি সফলভাবে তৈরি করা হয়েছে।\nURL: ${msg}\n\n✅আপনার লিঙ্কগুলো\n\n🌐 CloudFlare Page Link\n${cUrl}\n\n🌐 WebView Page Link\n${wUrl}`,m);
-}
-}
-else{
-bot.sendMessage(cid,`⚠️ দয়া করে একটি সঠিক লিঙ্ক দিন , লিঙ্কে অবশ্যই http অথবা https থাকতে হবে।`);
-createNew(cid);
-
-}
-}
+// 🎯 createLink ফাংশন শেষ
 
 
 function createNew(cid){
